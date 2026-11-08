@@ -1,0 +1,27 @@
+{
+  "name": "job-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Distributed job processing system (API + queue workers)",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @jobs/api",
+    "dev:worker": "npm run dev -w @jobs/worker",
+    "build": "npm run build -w @jobs/shared && npm run build -w @jobs/api && npm run build -w @jobs/worker",
+    "typecheck": "tsc -b",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
