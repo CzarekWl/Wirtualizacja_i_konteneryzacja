@@ -1,0 +1,15 @@
+{
+  "name": "@jobs/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "REST API for the job processing system",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@jobs/shared": "*"
+  }
+}
