@@ -1,8 +1,8 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/shared" },
-    { "path": "apps/api" },
-    { "path": "apps/worker" }
+    { "path": "./packages/shared" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" }
   ]
 }

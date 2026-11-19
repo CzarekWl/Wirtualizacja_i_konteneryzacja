@@ -6,10 +6,15 @@
   "description": "REST API for the job processing system",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch src/index.ts"
+    "build": "tsc -b tsconfig.json",
+    "dev": "pnpm --filter @jobs/shared build && tsx watch src/index.ts"
   },
   "dependencies": {
-    "@jobs/shared": "*"
+    "@jobs/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
   }
 }
