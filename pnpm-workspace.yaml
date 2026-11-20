@@ -1,0 +1,19 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+catalog:
+  "@types/node": ^22.20.5
+  tsx: ^4.23.15
+  typescript: ^7.0.2
+
+engineStrict: true
+
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAge: 4320 # 3 days (or 20160 for 2 weeks)
+minimumReleaseAgeExcludePrune: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - undici-types@6.21.0

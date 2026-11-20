@@ -1,0 +1,25 @@
+{
+  "name": "job-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Distributed job processing system (API + queue workers)",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=24.8.0",
+    "pnpm": ">=12.21.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @jobs/shared --filter @jobs/api --filter @jobs/worker dev",
+    "dev:api": "pnpm --parallel --filter @jobs/shared --filter @jobs/api dev",
+    "dev:worker": "pnpm --parallel --filter @jobs/shared --filter @jobs/worker dev",
+    "build": "pnpm -r build",
+    "typecheck": "tsc -b",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}
