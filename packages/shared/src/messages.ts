@@ -1,0 +1,13 @@
+import { z } from "zod";
+import { JobRequest } from "./contracts.js";
+
+export const JobMessage = z.intersection(
+  JobRequest,
+  z.object({
+    version: z.literal(1),
+    jobId: z.uuid(),
+    attempt: z.number().int().min(1),
+  })
+);
+
+export type JobMessage = z.infer<typeof JobMessage>;
