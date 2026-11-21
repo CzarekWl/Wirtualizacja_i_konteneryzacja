@@ -49,17 +49,21 @@ pnpm build         # build every package
 pnpm audit --audit-level=high --ignore-registry-errors
 ```
 
-`pnpm audit` is a pnpm command, not a repository script.
+## Tooling
+
+ESLint, Prettier, TypeScript, and Vitest are configured at the repository root.
 
 ## Coverage
 
-Coverage must be at least 80% for lines, statements, functions, and branches in
-`packages/*/src`. The `apps/*` packages have no tests yet.
+Minimum 80% coverage (lines, statements, functions, branches) is enforced for `packages/*/src`.
+
+## CI
+
+`ci.yml` runs on pull requests and pushes to `main`. It runs lint, format, typecheck, tests, build, audit, and Docker checks (hadolint, build, Trivy; skipped if no Dockerfiles exist). Set `CI` as a required check in branch protection.
+
+- **CodeQL:** `.github/workflows/codeql.yml`
+- **Releases:** `.github/workflows/release.yml`
 
 ## Releases
 
-Releases are started manually: **Actions → Release → Run workflow**, then
-choose `patch`, `minor`, or `major`. The workflow creates an annotated
-`vX.Y.Z` tag on `main` and a GitHub Release with generated notes.
-
-The tag is the version. Package versions in `package.json` stay at `0.1.0` because nothing is published to a registry.
+Run **Actions -> Release -> Run workflow** and select `patch`, `minor`, or `major`. After verifying `CI` passed on `main`, it tags `vX.Y.Z` and creates a GitHub Release. `package.json` versions stay at `0.1.0`.

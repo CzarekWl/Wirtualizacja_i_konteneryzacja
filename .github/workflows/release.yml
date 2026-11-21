@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release
@@ -26,15 +27,45 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Verify CI passed on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          run=$(gh run list \
+            --workflow=ci.yml \
+            --branch=main \
+            --commit="$sha" \
+            --limit=1 \
+            --json status,conclusion \
+            --jq '.[0] // empty | "\(.status) \(.conclusion // "")"')
+          if [ -z "$run" ]; then
+            echo "::error::No CI run found for main@$sha"
+            exit 1
+          fi
+          read -r status conclusion <<< "$run"
+          if [ "${status:-missing}" != "completed" ] || [ "${conclusion:-}" != "success" ]; then
+            echo "::error::CI on main@$sha is '${status:-missing}/${conclusion:-}', not a completed success"
+            exit 1
+          fi
+
       - name: Compute next tag
         id: next
         env:
           BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          # Avoid SIGPIPE from `git tag | head -n1` under pipefail
-          mapfile -t tags < <(git tag --list 'v[0-9]*' --sort=-v:refname)
-          latest=${tags[0]:-}
+          # Only stable vX.Y.Z tags reachable from main; skip prereleases.
+          tag_output=$(git tag --merged HEAD --list 'v[0-9]*' --sort=-v:refname)
+          mapfile -t tags <<< "$tag_output"
+          latest=""
+          for tag in "${tags[@]}"; do
+            if [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              latest="$tag"
+              break
+            fi
+          done
           if [ -z "$latest" ]; then
             case "$BUMP" in
               major) next=v1.0.0 ;;
@@ -67,7 +98,21 @@ jobs:
           git push origin "$NEXT_TAG"
 
       - name: Create GitHub Release
+        id: release
         env:
           GITHUB_TOKEN: ${{ github.token }}
           NEXT_TAG: ${{ steps.next.outputs.next }}
         run: gh release create "$NEXT_TAG" --generate-notes --title "$NEXT_TAG"
+
+      - name: Remove tag after failed release
+        if: failure() && steps.next.outputs.next != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_TAG: ${{ steps.next.outputs.next }}
+        run: |
+          set -euo pipefail
+          if gh release view "$NEXT_TAG" >/dev/null 2>&1; then
+            echo "Release $NEXT_TAG exists; keeping the tag."
+            exit 0
+          fi
+          git push origin --delete "$NEXT_TAG" || true

@@ -2,13 +2,12 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -17,92 +16,150 @@ jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-          cache: pnpm
+      - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
 
   format:
     name: format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-          cache: pnpm
+      - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
 
   typecheck:
     name: typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-          cache: pnpm
+      - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
 
   test:
     name: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-          cache: pnpm
+      - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jobs/shared... build
       - run: pnpm test:coverage
 
   build:
     name: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-          cache: pnpm
+      - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
   audit:
     name: audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
+      - uses: ./.github/actions/setup-node
       - run: pnpm audit --audit-level=high --ignore-registry-errors
+
+  docker-discover:
+    name: docker-discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_files: ${{ steps.discover.outputs.has_files }}
+      matrix: ${{ steps.discover.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Find Dockerfiles
+        id: discover
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files 'Dockerfile*' '**/Dockerfile*' '*.dockerfile' '**/*.dockerfile')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No tracked Dockerfiles found; skipping."
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          matrix=$(
+            for file in "${files[@]}"; do
+              slug=$(printf '%s' "$file" | LC_ALL=C tr '[:upper:]/.' '[:lower:]--' | LC_ALL=C tr -cd 'a-z0-9-')
+              hash=$(printf '%s' "$file" | sha256sum | cut -c1-8)
+              printf '%s\t%s-%s\n' "$file" "$slug" "$hash"
+            done | jq -Rnc '
+              [inputs | split("\t") | {file: .[0], slug: .[1]}]
+              | {include: .}
+            '
+          )
+
+          echo "has_files=true" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  docker:
+    name: docker
+    needs: docker-discover
+    if: needs.docker-discover.outputs.has_files == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.docker-discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: ${{ matrix.file }}
+          failure-threshold: warning
+
+      - name: Build image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: docker build -f "${{ matrix.file }}" -t "ci-${{ matrix.slug }}:local" .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ci-${{ matrix.slug }}:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
 
   ci:
     name: CI
-    if: always()
-    needs: [lint, format, typecheck, test, build, audit]
+    if: ${{ !cancelled() }}
+    needs: [lint, format, typecheck, test, build, audit, docker-discover, docker]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Verify every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          results="${{ join(needs.*.result, ' ') }}"
-          echo "Results: $results"
-          for result in $results; do
-            if [ "$result" != "success" ]; then
-              echo "::error::Job result was '$result'"
-              exit 1
-            fi
-          done
+          set -euo pipefail
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if ! echo "$NEEDS" | jq -e '
+            to_entries | all(.[];
+              .value.result == "success" or
+              (.key == "docker" and .value.result == "skipped")
+            )
+          ' > /dev/null; then
+            echo "::error::One or more jobs did not succeed"
+            exit 1
+          fi
