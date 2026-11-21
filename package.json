@@ -14,12 +14,24 @@
     "dev:api": "pnpm --parallel --filter @jobs/shared --filter @jobs/api dev",
     "dev:worker": "pnpm --parallel --filter @jobs/shared --filter @jobs/worker dev",
     "build": "pnpm -r build",
-    "typecheck": "tsc -b",
-    "test": "pnpm -r --if-present test"
+    "typecheck": "tsc -b && tsc -p tsconfig.eslint.json",
+    "lint": "eslint \"apps/**/*.ts\" \"packages/**/*.ts\" eslint.config.js --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@eslint/js": "catalog:",
     "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "globals": "catalog:",
+    "prettier": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
   }
 }

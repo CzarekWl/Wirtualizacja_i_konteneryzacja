@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Compute next tag
+        id: next
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          # Avoid SIGPIPE from `git tag | head -n1` under pipefail
+          mapfile -t tags < <(git tag --list 'v[0-9]*' --sort=-v:refname)
+          latest=${tags[0]:-}
+          if [ -z "$latest" ]; then
+            case "$BUMP" in
+              major) next=v1.0.0 ;;
+              *) next=v0.1.0 ;;
+            esac
+          else
+            v=${latest#v}
+            IFS=. read -r MA MI PA <<< "$v"
+            case "$BUMP" in
+              major) next="v$((MA + 1)).0.0" ;;
+              minor) next="v$MA.$((MI + 1)).0" ;;
+              patch) next="v$MA.$MI.$((PA + 1))" ;;
+            esac
+          fi
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "::error::Tag $next already exists"
+            exit 1
+          fi
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "Releasing $next (previous: ${latest:-none})"
+
+      - name: Create tag
+        env:
+          NEXT_TAG: ${{ steps.next.outputs.next }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
+          git push origin "$NEXT_TAG"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEXT_TAG: ${{ steps.next.outputs.next }}
+        run: gh release create "$NEXT_TAG" --generate-notes --title "$NEXT_TAG"
