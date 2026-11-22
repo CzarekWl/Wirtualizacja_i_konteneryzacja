@@ -15,11 +15,12 @@
     "dev:worker": "pnpm --parallel --filter @jobs/shared --filter @jobs/worker dev",
     "build": "pnpm -r build",
     "typecheck": "tsc -b && tsc -p tsconfig.eslint.json",
-    "lint": "eslint \"apps/**/*.ts\" \"packages/**/*.ts\" eslint.config.js --max-warnings 0",
+    "lint": "eslint \"apps/*/src/**/*.ts\" \"packages/*/src/**/*.ts\" vitest.config.ts eslint.config.js --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit:ci": "pnpm audit --audit-level=high --ignore-registry-errors"
   },
   "devDependencies": {
     "@eslint/js": "catalog:",

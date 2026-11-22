@@ -100,12 +100,12 @@ jobs:
       - name: Create GitHub Release
         id: release
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           NEXT_TAG: ${{ steps.next.outputs.next }}
         run: gh release create "$NEXT_TAG" --generate-notes --title "$NEXT_TAG"
 
       - name: Remove tag after failed release
-        if: failure() && steps.next.outputs.next != ''
+        if: (failure() || cancelled()) && steps.next.outputs.next != ''
         env:
           GH_TOKEN: ${{ github.token }}
           NEXT_TAG: ${{ steps.next.outputs.next }}

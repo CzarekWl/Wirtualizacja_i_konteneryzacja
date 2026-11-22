@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-node
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jobs/shared... build
       - run: pnpm lint
 
   format:
@@ -129,7 +130,9 @@ jobs:
       - name: Build image
         env:
           DOCKER_BUILDKIT: "1"
-        run: docker build -f "${{ matrix.file }}" -t "ci-${{ matrix.slug }}:local" .
+          DOCKERFILE: ${{ matrix.file }}
+          IMAGE: ci-${{ matrix.slug }}:local
+        run: docker build -f "$DOCKERFILE" -t "$IMAGE" .
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

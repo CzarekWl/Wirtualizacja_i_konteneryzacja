@@ -46,7 +46,7 @@ pnpm typecheck     # build and typecheck tests
 pnpm test          # Vitest
 pnpm test:coverage # Vitest with coverage
 pnpm build         # build every package
-pnpm audit --audit-level=high --ignore-registry-errors
+pnpm audit         # dependency audit (high severity)
 ```
 
 ## Tooling
