@@ -55,7 +55,7 @@ ESLint, Prettier, TypeScript, and Vitest are configured at the repository root.
 
 ## Coverage
 
-Minimum 80% coverage (lines, statements, functions, branches) is enforced for `packages/*/src`.
+Minimum 80% coverage (lines, statements, functions, branches) is enforced for source files in `packages` and `apps`.
 
 ## CI
 

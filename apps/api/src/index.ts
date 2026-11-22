@@ -20,14 +20,13 @@ app.use((_request, response) => {
 });
 
 const isMainModule =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 let server: Server | undefined;
 
 if (isMainModule) {
   server = app.listen(port, () => {
-    console.log(`API listening on port ${port}`);
+    console.info(`API listening on port ${port}`);
   });
 }
 
