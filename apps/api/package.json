@@ -7,14 +7,18 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -b tsconfig.json",
-    "dev": "pnpm --filter @jobs/shared build && tsx watch src/index.ts"
+    "dev": "pnpm --filter @jobs/shared build && tsx watch src/index.ts",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@jobs/shared": "workspace:*"
+    "@jobs/shared": "workspace:*",
+    "express": "^5.3.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^5.1.0"
   }
 }
