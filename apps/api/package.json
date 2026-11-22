@@ -10,9 +10,11 @@
     "dev": "pnpm --filter @jobs/shared build && tsx watch src/index.ts"
   },
   "dependencies": {
-    "@jobs/shared": "workspace:*"
+    "@jobs/shared": "workspace:*",
+    "express": "^5.3.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
