@@ -7,7 +7,7 @@ export const JobMessage = z.intersection(
     version: z.literal(1),
     jobId: z.uuid(),
     attempt: z.number().int().min(1),
-  })
+  }),
 );
 
 export type JobMessage = z.infer<typeof JobMessage>;

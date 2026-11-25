@@ -1,9 +1,7 @@
-
 import { describe, it, expect } from "vitest";
 import { JobMessage } from "./messages.js";
 
 describe("JobMessage validation", () => {
-  // Test 1: Poprawna wiadomość
   it("accepts a valid job message", () => {
     const message = {
       version: 1,
@@ -20,7 +18,6 @@ describe("JobMessage validation", () => {
     expect(result.success).toBe(true);
   });
 
-  // Test 2: Brak identyfikatora zadania
   it("rejects a message without jobId", () => {
     const message = {
       version: 1,
