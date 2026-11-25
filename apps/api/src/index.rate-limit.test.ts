@@ -2,10 +2,14 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+const { connect, query, release } = vi.hoisted(() => ({
+  connect: vi.fn(),
+  query: vi.fn(),
+  release: vi.fn(),
+}));
 
 vi.mock("./database.js", () => ({
-  pool: { query },
+  pool: { connect },
 }));
 
 import { app } from "./index.js";
@@ -13,6 +17,10 @@ import { app } from "./index.js";
 describe("API readiness rate limit", () => {
   let server: Server;
   let baseUrl: string;
+
+  beforeAll(() => {
+    connect.mockResolvedValue({ query, release });
+  });
 
   beforeAll(async () => {
     server = app.listen(0, "127.0.0.1");

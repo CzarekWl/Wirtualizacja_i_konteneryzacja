@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import { rateLimit } from "express-rate-limit";
 import type { Server } from "node:http";
 import { pathToFileURL } from "node:url";
+import type { PoolClient } from "pg";
 import { SHARED_PACKAGE_NAME } from "@jobs/shared";
 import { pool } from "./database.js";
 
@@ -10,6 +11,7 @@ export const SERVICE_NAME = "@jobs/api";
 
 export const app: Express = express();
 const port = Number(process.env.PORT ?? 3000);
+const readinessQueryTimeoutMs = 5_000;
 
 app.use(express.json());
 
@@ -29,11 +31,29 @@ app.get(
     },
   }),
   async (_request, response) => {
+    let client: PoolClient | undefined;
+    let queryTimedOut = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
     try {
-      await pool.query("SELECT 1");
+      client = await pool.connect();
+      await Promise.race([
+        client.query("SELECT 1"),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            queryTimedOut = true;
+            reject(new Error("Readiness query timed out"));
+          }, readinessQueryTimeoutMs);
+        }),
+      ]);
       response.status(200).json({ status: "ok" });
     } catch {
       response.status(503).json({ status: "error", database: "unavailable" });
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      client?.release(queryTimedOut);
     }
   },
 );

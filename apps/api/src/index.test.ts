@@ -2,10 +2,14 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+const { connect, query, release } = vi.hoisted(() => ({
+  connect: vi.fn(),
+  query: vi.fn(),
+  release: vi.fn(),
+}));
 
 vi.mock("./database.js", () => ({
-  pool: { query },
+  pool: { connect },
 }));
 
 import { app } from "./index.js";
@@ -24,6 +28,8 @@ describe("API endpoints", () => {
 
   beforeEach(() => {
     query.mockReset();
+    release.mockReset();
+    connect.mockReset().mockResolvedValue({ query, release });
   });
 
   afterAll(async () => {
@@ -48,6 +54,7 @@ describe("API endpoints", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
     expect(query).toHaveBeenCalledWith("SELECT 1");
+    expect(release).toHaveBeenCalledWith(false);
   });
 
   it("returns a generic 503 response when the database readiness query fails", async () => {
@@ -59,7 +66,30 @@ describe("API endpoints", () => {
     expect(response.status).toBe(503);
     expect(body).toBe('{"status":"error","database":"unavailable"}');
     expect(body).not.toContain("credentials");
+    expect(release).toHaveBeenCalledWith(false);
   });
+
+  it("returns 503 and destroys the connection when the readiness query times out", async () => {
+    let rejectQuery: ((error: Error) => void) | undefined;
+    query.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectQuery = reject;
+        }),
+    );
+    release.mockImplementationOnce((destroy: boolean) => {
+      if (destroy) {
+        rejectQuery?.(new Error("client destroyed after query timeout"));
+      }
+    });
+
+    const response = await fetch(`${baseUrl}/health/ready`);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(body).toBe('{"status":"error","database":"unavailable"}');
+    expect(release).toHaveBeenCalledWith(true);
+  }, 10_000);
 
   it("returns 404 and JSON for an unknown route", async () => {
     const response = await fetch(`${baseUrl}/unknown-route`);
