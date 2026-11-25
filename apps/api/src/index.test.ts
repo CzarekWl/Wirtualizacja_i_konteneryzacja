@@ -1,6 +1,13 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+
+vi.mock("./database.js", () => ({
+  pool: { query },
+}));
+
 import { app } from "./index.js";
 
 describe("API endpoints", () => {
@@ -15,6 +22,10 @@ describe("API endpoints", () => {
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
+  beforeEach(() => {
+    query.mockReset();
+  });
+
   afterAll(async () => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
@@ -27,6 +38,27 @@ describe("API endpoints", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.text()).toBe('{"status":"ok"}');
+  });
+
+  it("returns 200 when the database readiness query succeeds", async () => {
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
+
+    const response = await fetch(`${baseUrl}/health/ready`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+    expect(query).toHaveBeenCalledWith("SELECT 1");
+  });
+
+  it("returns a generic 503 response when the database readiness query fails", async () => {
+    query.mockRejectedValueOnce(new Error("database credentials must not be exposed"));
+
+    const response = await fetch(`${baseUrl}/health/ready`);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(body).toBe('{"status":"error","database":"unavailable"}');
+    expect(body).not.toContain("credentials");
   });
 
   it("returns 404 and JSON for an unknown route", async () => {

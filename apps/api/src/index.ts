@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import type { Server } from "node:http";
 import { pathToFileURL } from "node:url";
 import { SHARED_PACKAGE_NAME } from "@jobs/shared";
+import { pool } from "./database.js";
 
 export { SHARED_PACKAGE_NAME };
 export const SERVICE_NAME = "@jobs/api";
@@ -13,6 +14,15 @@ app.use(express.json());
 
 app.get("/health", (_request, response) => {
   response.status(200).json({ status: "ok" });
+});
+
+app.get("/health/ready", async (_request, response) => {
+  try {
+    await pool.query("SELECT 1");
+    response.status(200).json({ status: "ok" });
+  } catch {
+    response.status(503).json({ status: "error", database: "unavailable" });
+  }
 });
 
 app.use((_request, response) => {
@@ -28,6 +38,29 @@ if (isMainModule) {
   server = app.listen(port, () => {
     console.info(`API listening on port ${port}`);
   });
+
+  let isShuttingDown = false;
+  const shutdown = () => {
+    if (isShuttingDown) {
+      return;
+    }
+
+    isShuttingDown = true;
+    server?.close((error) => {
+      if (error) {
+        console.error("Failed to close API server");
+        process.exitCode = 1;
+      }
+
+      void pool.end().catch(() => {
+        console.error("Failed to close database connection pool");
+        process.exitCode = 1;
+      });
+    });
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 export { server };
