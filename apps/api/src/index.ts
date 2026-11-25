@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import { rateLimit } from "express-rate-limit";
 import type { Server } from "node:http";
 import { pathToFileURL } from "node:url";
 import { SHARED_PACKAGE_NAME } from "@jobs/shared";
@@ -16,14 +17,26 @@ app.get("/health", (_request, response) => {
   response.status(200).json({ status: "ok" });
 });
 
-app.get("/health/ready", async (_request, response) => {
-  try {
-    await pool.query("SELECT 1");
-    response.status(200).json({ status: "ok" });
-  } catch {
-    response.status(503).json({ status: "error", database: "unavailable" });
-  }
-});
+app.get(
+  "/health/ready",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    handler: (_request, response) => {
+      response.status(429).json({ error: "Too many requests" });
+    },
+  }),
+  async (_request, response) => {
+    try {
+      await pool.query("SELECT 1");
+      response.status(200).json({ status: "ok" });
+    } catch {
+      response.status(503).json({ status: "error", database: "unavailable" });
+    }
+  },
+);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Not found" });
