@@ -1,8 +1,8 @@
 
--- Rozszerzenie umożliwiające generowanie UUID
+-- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Tabela przechowująca zadania
+-- Table for storing jobs
 CREATE TABLE jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -31,7 +31,7 @@ CREATE TABLE jobs (
     finished_at TIMESTAMPTZ
 );
 
--- Indeksy przyspieszające wyszukiwanie
+-- Indexes to optimize queries
 CREATE INDEX jobs_status_idx ON jobs (status);
 
 CREATE INDEX jobs_created_at_idx ON jobs (created_at DESC);
