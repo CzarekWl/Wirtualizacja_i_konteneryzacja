@@ -6,8 +6,8 @@ export function createPool(connectionString: string): Pool {
     connectionTimeoutMillis: 5_000,
   });
 
-  pool.on("error", () => {
-    console.error("Unexpected error on an idle PostgreSQL client");
+  pool.on("error", (error) => {
+    console.error("Unexpected error on an idle PostgreSQL client", error);
   });
 
   return pool;

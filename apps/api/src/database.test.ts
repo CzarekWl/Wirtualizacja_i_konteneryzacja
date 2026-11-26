@@ -1,13 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { Pool, poolOn } = vi.hoisted(() => ({
-  poolOn: vi.fn<(event: string, listener: (error: Error) => void) => void>(),
-  Pool: vi.fn(
-    class MockPool {
-      on = poolOn;
-    },
-  ),
-}));
+const { Pool, poolOn } = vi.hoisted(() => {
+  const poolOn = vi.fn<(event: string, listener: (error: Error) => void) => void>();
+
+  class MockPool {
+    private readonly listeners = new Map<string, ((error: Error) => void)[]>();
+
+    on(event: string, listener: (error: Error) => void): this {
+      const eventListeners = this.listeners.get(event) ?? [];
+      eventListeners.push(listener);
+      this.listeners.set(event, eventListeners);
+      poolOn(event, listener);
+      return this;
+    }
+
+    emit(event: string, error: Error): boolean {
+      for (const listener of this.listeners.get(event) ?? []) {
+        listener(error);
+      }
+
+      return true;
+    }
+
+    listenerCount(event: string): number {
+      return this.listeners.get(event)?.length ?? 0;
+    }
+  }
+
+  return { Pool: vi.fn(MockPool), poolOn };
+});
 
 vi.mock("pg", () => ({ Pool }));
 
@@ -47,21 +68,22 @@ describe("database connection pool", () => {
 
   it("logs errors emitted by an idle database client", async () => {
     const { createPool } = await import("./database.js");
-    createPool("postgresql://jobs:jobs@localhost:5432/jobs");
-
-    const errorHandler = poolOn.mock.calls.find(([event]) => event === "error")?.[1];
-    expect(errorHandler).toBeTypeOf("function");
+    const pool = createPool("postgresql://jobs:jobs@localhost:5432/jobs");
+    expect(poolOn).toHaveBeenCalledTimes(1);
+    expect(poolOn).toHaveBeenCalledWith("error", expect.any(Function));
+    expect(pool.listenerCount("error")).toBe(1);
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      if (typeof errorHandler !== "function") {
-        throw new Error("Expected the pool to register an error handler");
-      }
-
       const error = new Error("connection lost");
-      errorHandler(error);
+      pool.emit("error", error);
 
-      expect(consoleError).toHaveBeenCalledWith("Unexpected error on an idle PostgreSQL client");
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Unexpected error on an idle PostgreSQL client",
+        error,
+      );
+      expect(consoleError.mock.calls[0]?.[1]).toBe(error);
     } finally {
       consoleError.mockRestore();
     }
