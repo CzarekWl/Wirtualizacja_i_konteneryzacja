@@ -17,14 +17,10 @@ From a fresh clone, copy the environment template and fill in its values:
 cp .env.example .env
 ```
 
-Set `POSTGRES_USER`, `POSTGRES_DB`, `DATABASE_URL`, `RABBITMQ_USER`, and
-`RABBITMQ_PASSWORD` in `.env`. Create the PostgreSQL password secret using the
-same password as in `DATABASE_URL` (use a URL-safe password):
-
-```sh
-mkdir -p secrets
-printf '%s' 'your-postgres-password' > secrets/postgres_password.txt
-```
+Set `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `RABBITMQ_USER`, and
+`RABBITMQ_PASSWORD` in `.env`. `DATABASE_URL` is constructed from the
+PostgreSQL user, password, and database values in that file. Use a URL-safe
+PostgreSQL password.
 
 Install dependencies and build the project:
 
@@ -41,12 +37,13 @@ Start PostgreSQL and RabbitMQ:
 docker compose up -d
 ```
 
-The pnpm start scripts do not load `.env`. Set `DATABASE_URL` in the shell
-before running the API; use the same PostgreSQL password as in
-`secrets/postgres_password.txt`:
+The pnpm start scripts do not load `.env`. Load it into the shell before
+running the API so it uses the same credentials as PostgreSQL:
 
 ```sh
-export DATABASE_URL='postgresql://jobs:your-postgres-password@localhost:5432/jobs'
+set -a
+. ./.env
+set +a
 ```
 
 Run the API, the worker, and the shared watcher together:
