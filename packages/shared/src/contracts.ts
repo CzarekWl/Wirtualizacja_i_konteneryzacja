@@ -7,7 +7,13 @@ export const SumPayload = z.object({
 
 // Schemat danych CSV
 export const CsvPayload = z.object({
-  csv: z.string().min(1).max(200_000),
+  csv: z
+    .string()
+    .min(1)
+    .max(200_000)
+    .refine((csv) => !csv.includes("\u0000") && csv.isWellFormed(), {
+      message: "CSV must contain valid Unicode without NUL characters",
+    }),
 });
 
 // Zadanie przychodzące do API

@@ -97,6 +97,30 @@ describe("API endpoints", () => {
     expect(insertJob).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["a NUL character", "name\nA\u0000B"],
+    ["an unpaired high surrogate", "name\n\uD83D"],
+    ["an unpaired low surrogate", "name\n\uDE00"],
+  ])("rejects CSV containing %s before querying the database", async (_description, csv) => {
+    const response = await postJob({ type: "csv_stats", payload: { csv } });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      errors: [{ code: "custom", path: ["payload", "csv"] }],
+    });
+    expect(insertJob).not.toHaveBeenCalled();
+  });
+
+  it("accepts CSV containing an emoji and passes it to the database unchanged", async () => {
+    const payload = { csv: "name\n😀" };
+    const response = await postJob({ type: "csv_stats", payload });
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual(createdJob);
+    expect(insertJob).toHaveBeenCalledTimes(1);
+    expect(insertJob.mock.calls[0]?.[1]).toEqual(["csv_stats", JSON.stringify(payload)]);
+  });
+
   it("returns a generic 500 response when inserting a job fails", async () => {
     insertJob.mockRejectedValueOnce(new Error("database details"));
 
