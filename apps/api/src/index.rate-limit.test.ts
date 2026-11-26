@@ -17,7 +17,7 @@ describe("API readiness rate limit", () => {
 
   beforeAll(async () => {
     connect.mockResolvedValue({ query, release });
-    const app = createApp({ connect });
+    const app = createApp({ connect, query: vi.fn() });
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
 

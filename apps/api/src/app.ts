@@ -1,3 +1,4 @@
+import { JobRequest } from "@jobs/shared";
 import express, { type Express } from "express";
 import { rateLimit } from "express-rate-limit";
 
@@ -6,14 +7,35 @@ interface ReadinessClient {
   release(destroy?: boolean): void;
 }
 
-interface ReadinessPool {
+interface DatabasePool {
   connect(): Promise<ReadinessClient>;
+  query(statement: string, values: string[]): Promise<{ rows: { id: string; status: string }[] }>;
 }
 
 const readinessQueryTimeoutMs = 5_000;
 
-export function createApp(pool: ReadinessPool): Express {
+export function createApp(pool: DatabasePool): Express {
   const app: Express = express();
+
+  // Allow a maximum-length CSV even when its characters require JSON escapes.
+  app.post("/jobs", express.json({ limit: "2mb", strict: false }), async (request, response) => {
+    const job = JobRequest.safeParse(request.body);
+    if (!job.success) {
+      response.status(400).json({ errors: job.error.issues });
+      return;
+    }
+
+    try {
+      const { rows } = await pool.query(
+        "INSERT INTO jobs (type, payload, status) VALUES ($1, $2, 'pending') RETURNING id, status",
+        [job.data.type, JSON.stringify(job.data.payload)],
+      );
+      const [{ id, status }] = rows;
+      response.status(202).json({ id, status });
+    } catch {
+      response.status(500).json({ error: "Failed to create job" });
+    }
+  });
 
   app.use(express.json());
 

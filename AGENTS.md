@@ -41,11 +41,12 @@
 - Identify breaking changes and missing error handling.
 - Prioritize correctness, reliability, and security over stylistic preferences.
 
-## Review Behavior
+## Agent Behavior
 
-- Only review code; do not modify files.
-- Do not create commits, branches, or Pull Requests.
-- Never merge Pull Requests.
+- During code reviews, only analyze code; do not modify files.
+- During development tasks, code modifications are allowed.
+- Do not create commits, branches, or Pull Requests without explicit user approval.
+- Never merge Pull Requests without explicit user approval.
 - Report issues with file paths, line numbers, and clear explanations.
 - Prioritize critical and high-impact problems.
 - Do not report speculative issues without reasonable evidence.
