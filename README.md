@@ -11,12 +11,40 @@ Distributed job processing system (API + queue workers).
 
 ## Setup
 
+From a fresh clone, copy the environment template and fill in its values:
+
+```sh
+cp .env.example .env
+```
+
+Set `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `RABBITMQ_USER`, and
+`RABBITMQ_PASSWORD` in `.env`. `DATABASE_URL` is constructed from the
+PostgreSQL user, password, and database values in that file. Use a URL-safe
+PostgreSQL password.
+
+Install dependencies and build the project:
+
 ```sh
 pnpm install
 pnpm build
 ```
 
 ## Run
+
+Start PostgreSQL and RabbitMQ:
+
+```sh
+docker compose up -d
+```
+
+The pnpm start scripts do not load `.env`. Load it into the shell before
+running the API so it uses the same credentials as PostgreSQL:
+
+```sh
+set -a
+. ./.env
+set +a
+```
 
 Run the API, the worker, and the shared watcher together:
 
