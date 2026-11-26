@@ -1,24 +1,22 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp } from "./app.js";
 
-const { connect, query, release } = vi.hoisted(() => ({
-  connect: vi.fn(),
-  query: vi.fn(),
-  release: vi.fn(),
-}));
-
-vi.mock("./database.js", () => ({
-  pool: { connect },
-}));
-
-import { app } from "./index.js";
+interface TestClient {
+  query(statement: string): Promise<unknown>;
+  release(destroy?: boolean): void;
+}
 
 describe("API endpoints", () => {
   let server: Server;
   let baseUrl: string;
+  const query = vi.fn<(statement: string) => Promise<unknown>>();
+  const release = vi.fn<(destroy?: boolean) => void>();
+  const connect = vi.fn<() => Promise<TestClient>>();
 
   beforeAll(async () => {
+    const app = createApp({ connect });
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
 
@@ -69,6 +67,17 @@ describe("API endpoints", () => {
     expect(release).toHaveBeenCalledWith(false);
   });
 
+  it("returns 503 when acquiring a database client fails", async () => {
+    connect.mockRejectedValueOnce(new Error("database connection failed"));
+
+    const response = await fetch(`${baseUrl}/health/ready`);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "error", database: "unavailable" });
+    expect(query).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
+  });
+
   it("returns 503 and destroys the connection when the readiness query times out", async () => {
     let rejectQuery: ((error: Error) => void) | undefined;
     query.mockImplementationOnce(
@@ -77,7 +86,7 @@ describe("API endpoints", () => {
           rejectQuery = reject;
         }),
     );
-    release.mockImplementationOnce((destroy: boolean) => {
+    release.mockImplementationOnce((destroy?: boolean) => {
       if (destroy) {
         rejectQuery?.(new Error("client destroyed after query timeout"));
       }

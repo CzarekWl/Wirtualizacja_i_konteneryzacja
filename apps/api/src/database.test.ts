@@ -25,31 +25,29 @@ afterEach(() => {
 });
 
 describe("database connection pool", () => {
-  it("fails clearly when DATABASE_URL is missing", async () => {
+  it("does not read DATABASE_URL or create a pool when imported", async () => {
     delete process.env.DATABASE_URL;
 
-    await expect(import("./database.js")).rejects.toThrow(
-      "DATABASE_URL environment variable is required",
-    );
+    await Promise.all([import("./database.js"), import("./app.js")]);
     expect(Pool).not.toHaveBeenCalled();
   });
 
-  it("creates one pool using DATABASE_URL", async () => {
+  it("creates one pool using the supplied connection string", async () => {
     const connectionString = "postgresql://jobs:jobs@localhost:5432/jobs";
-    process.env.DATABASE_URL = connectionString;
-
-    await import("./database.js");
+    const { createPool } = await import("./database.js");
+    const pool = createPool(connectionString);
 
     expect(Pool).toHaveBeenCalledTimes(1);
     expect(Pool).toHaveBeenCalledWith({
       connectionString,
       connectionTimeoutMillis: 5_000,
     });
+    expect(pool).toBeInstanceOf(Pool);
   });
 
   it("logs errors emitted by an idle database client", async () => {
-    process.env.DATABASE_URL = "postgresql://jobs:jobs@localhost:5432/jobs";
-    await import("./database.js");
+    const { createPool } = await import("./database.js");
+    createPool("postgresql://jobs:jobs@localhost:5432/jobs");
 
     const errorHandler = poolOn.mock.calls.find(([event]) => event === "error")?.[1];
     expect(errorHandler).toBeTypeOf("function");

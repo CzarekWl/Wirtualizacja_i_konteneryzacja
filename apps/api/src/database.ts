@@ -1,16 +1,14 @@
 import { Pool } from "pg";
 
-const connectionString = process.env.DATABASE_URL;
+export function createPool(connectionString: string): Pool {
+  const pool = new Pool({
+    connectionString,
+    connectionTimeoutMillis: 5_000,
+  });
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL environment variable is required");
+  pool.on("error", () => {
+    console.error("Unexpected error on an idle PostgreSQL client");
+  });
+
+  return pool;
 }
-
-export const pool = new Pool({
-  connectionString,
-  connectionTimeoutMillis: 5_000,
-});
-
-pool.on("error", () => {
-  console.error("Unexpected error on an idle PostgreSQL client");
-});

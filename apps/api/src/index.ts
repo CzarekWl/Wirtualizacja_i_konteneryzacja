@@ -1,74 +1,22 @@
-import express, { type Express } from "express";
-import { rateLimit } from "express-rate-limit";
 import type { Server } from "node:http";
 import { pathToFileURL } from "node:url";
-import type { PoolClient } from "pg";
 import { SHARED_PACKAGE_NAME } from "@jobs/shared";
-import { pool } from "./database.js";
+import { createApp } from "./app.js";
+import { createPool } from "./database.js";
 
 export { SHARED_PACKAGE_NAME };
 export const SERVICE_NAME = "@jobs/api";
 
-export const app: Express = express();
-const port = Number(process.env.PORT ?? 3000);
-const readinessQueryTimeoutMs = 5_000;
+export function startServer() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL environment variable is required");
+  }
 
-app.use(express.json());
-
-app.get("/health", (_request, response) => {
-  response.status(200).json({ status: "ok" });
-});
-
-app.get(
-  "/health/ready",
-  rateLimit({
-    windowMs: 60_000,
-    limit: 30,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-    handler: (_request, response) => {
-      response.status(429).json({ error: "Too many requests" });
-    },
-  }),
-  async (_request, response) => {
-    let client: PoolClient | undefined;
-    let queryTimedOut = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    try {
-      client = await pool.connect();
-      await Promise.race([
-        client.query("SELECT 1"),
-        new Promise<never>((_resolve, reject) => {
-          timeout = setTimeout(() => {
-            queryTimedOut = true;
-            reject(new Error("Readiness query timed out"));
-          }, readinessQueryTimeoutMs);
-        }),
-      ]);
-      response.status(200).json({ status: "ok" });
-    } catch {
-      response.status(503).json({ status: "error", database: "unavailable" });
-    } finally {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      client?.release(queryTimedOut);
-    }
-  },
-);
-
-app.use((_request, response) => {
-  response.status(404).json({ error: "Not found" });
-});
-
-const isMainModule =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
-
-let server: Server | undefined;
-
-if (isMainModule) {
-  server = app.listen(port, () => {
+  const pool = createPool(connectionString);
+  const app = createApp(pool);
+  const port = Number(process.env.PORT ?? 3000);
+  const server = app.listen(port, () => {
     console.info(`API listening on port ${port}`);
   });
 
@@ -79,7 +27,9 @@ if (isMainModule) {
     }
 
     isShuttingDown = true;
-    server?.close((error) => {
+    process.removeListener("SIGINT", shutdown);
+    process.removeListener("SIGTERM", shutdown);
+    server.close((error) => {
       if (error) {
         console.error("Failed to close API server");
         process.exitCode = 1;
@@ -94,6 +44,16 @@ if (isMainModule) {
 
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+
+  return { server, pool, shutdown };
+}
+
+const isMainModule =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+let server: Server | undefined;
+if (isMainModule) {
+  server = startServer().server;
 }
 
 export { server };

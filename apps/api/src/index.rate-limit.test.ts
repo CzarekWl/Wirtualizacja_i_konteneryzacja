@@ -1,28 +1,23 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createApp } from "./app.js";
 
-const { connect, query, release } = vi.hoisted(() => ({
-  connect: vi.fn(),
-  query: vi.fn(),
-  release: vi.fn(),
-}));
-
-vi.mock("./database.js", () => ({
-  pool: { connect },
-}));
-
-import { app } from "./index.js";
+interface TestClient {
+  query(statement: string): Promise<unknown>;
+  release(destroy?: boolean): void;
+}
 
 describe("API readiness rate limit", () => {
   let server: Server;
   let baseUrl: string;
-
-  beforeAll(() => {
-    connect.mockResolvedValue({ query, release });
-  });
+  const query = vi.fn<(statement: string) => Promise<unknown>>();
+  const release = vi.fn<(destroy?: boolean) => void>();
+  const connect = vi.fn<() => Promise<TestClient>>();
 
   beforeAll(async () => {
+    connect.mockResolvedValue({ query, release });
+    const app = createApp({ connect });
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
 
