@@ -17,25 +17,38 @@ const readinessQueryTimeoutMs = 5_000;
 export function createApp(pool: DatabasePool): Express {
   const app: Express = express();
 
-  // Allow a maximum-length CSV even when its characters require JSON escapes.
-  app.post("/jobs", express.json({ limit: "2mb", strict: false }), async (request, response) => {
-    const job = JobRequest.safeParse(request.body);
-    if (!job.success) {
-      response.status(400).json({ errors: job.error.issues });
-      return;
-    }
+  app.post(
+    "/jobs",
+    rateLimit({
+      windowMs: 60_000,
+      limit: 30,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      handler: (_request, response) => {
+        response.status(429).json({ error: "Too many requests" });
+      },
+    }),
+    // Allow a maximum-length CSV even when its characters require JSON escapes.
+    express.json({ limit: "2mb", strict: false }),
+    async (request, response) => {
+      const job = JobRequest.safeParse(request.body);
+      if (!job.success) {
+        response.status(400).json({ errors: job.error.issues });
+        return;
+      }
 
-    try {
-      const { rows } = await pool.query(
-        "INSERT INTO jobs (type, payload, status) VALUES ($1, $2, 'pending') RETURNING id, status",
-        [job.data.type, JSON.stringify(job.data.payload)],
-      );
-      const [{ id, status }] = rows;
-      response.status(202).json({ id, status });
-    } catch {
-      response.status(500).json({ error: "Failed to create job" });
-    }
-  });
+      try {
+        const { rows } = await pool.query(
+          "INSERT INTO jobs (type, payload, status) VALUES ($1, $2, 'pending') RETURNING id, status",
+          [job.data.type, JSON.stringify(job.data.payload)],
+        );
+        const [{ id, status }] = rows;
+        response.status(202).json({ id, status });
+      } catch {
+        response.status(500).json({ error: "Failed to create job" });
+      }
+    },
+  );
 
   app.use(express.json());
 
