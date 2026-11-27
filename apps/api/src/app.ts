@@ -22,7 +22,7 @@ export function createApp(pool: DatabasePool): Express {
   const createRateLimiter = () =>
     rateLimit({
       windowMs: 60_000,
-      limit: 30,
+      limit: 70,
       standardHeaders: "draft-8",
       legacyHeaders: false,
       handler: (_request, response) => {

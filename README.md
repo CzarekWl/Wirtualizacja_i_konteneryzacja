@@ -64,6 +64,42 @@ pnpm dev:worker
 
 Each command starts its own shared watcher.
 
+## API examples
+
+Set `API_URL` when the API is not available at the default local address:
+
+```sh
+API_URL=http://localhost:3000
+```
+
+**Create a job** — sends a `POST /jobs` request with a JSON body matching the sum job schema. The API requires `Content-Type: application/json` and returns a pending job ID and status.
+
+```sh
+curl --request POST "$API_URL/jobs" \
+  --header "Content-Type: application/json" \
+  --data '{"type":"sum","payload":{"numbers":[1,2,3]}}'
+```
+
+**Get a job** — retrieves a job by the UUID returned in the create response. Replace `<JOB_UUID>` with that ID.
+
+```sh
+curl --request GET "$API_URL/jobs/<JOB_UUID>"
+```
+
+**Health check** — checks whether the API process is responding with `GET /health`.
+
+```sh
+curl --request GET "$API_URL/health"
+```
+
+## Demo
+
+Submit 100 valid sum jobs to the local API:
+
+```sh
+./scripts/demo.sh
+```
+
 ## Scripts
 
 ```sh
