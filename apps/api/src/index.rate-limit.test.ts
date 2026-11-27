@@ -74,4 +74,23 @@ describe("API rate limits", () => {
     await malformedResponse.text();
     expect(insertJob).toHaveBeenCalledTimes(30);
   });
+
+  it("limits job lookups before querying the database", async () => {
+    insertJob.mockClear();
+    const jobId = "94c1923a-5361-4230-9904-5949ec415ad4";
+
+    for (let request = 0; request < 30; request += 1) {
+      const response = await fetch(`${baseUrl}/jobs/${jobId}`);
+      expect(response.status).toBe(200);
+      await response.text();
+    }
+
+    const limitedResponse = await fetch(`${baseUrl}/jobs/${jobId}`);
+
+    expect(limitedResponse.status).toBe(429);
+    expect(limitedResponse.headers.get("ratelimit")).toBeTruthy();
+    expect(limitedResponse.headers.get("retry-after")).toBeTruthy();
+    expect(await limitedResponse.json()).toEqual({ error: "Too many requests" });
+    expect(insertJob).toHaveBeenCalledTimes(30);
+  });
 });
