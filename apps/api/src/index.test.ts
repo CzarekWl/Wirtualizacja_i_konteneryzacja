@@ -20,6 +20,18 @@ describe("API endpoints", () => {
   const connect = vi.fn<() => Promise<TestClient>>();
   const sumJob = { type: "sum", payload: { numbers: [1, 2] } };
   const createdJob = { id: "94c1923a-5361-4230-9904-5949ec415ad4", status: "pending" };
+  const fullJob = {
+    id: createdJob.id,
+    type: "sum",
+    payload: { numbers: [1, 2] },
+    status: "completed",
+    result: { sum: 3 },
+    error: null,
+    attempts: 1,
+    created_at: new Date("2026-11-27T10:00:00.000Z"),
+    started_at: new Date("2026-11-27T10:01:00.000Z"),
+    finished_at: new Date("2026-11-27T10:02:00.000Z"),
+  };
 
   function postJob(body: unknown) {
     return fetch(`${baseUrl}/jobs`, {
@@ -27,6 +39,10 @@ describe("API endpoints", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  function getJob(id: string) {
+    return fetch(`${baseUrl}/jobs/${id}`);
   }
 
   beforeAll(async () => {
@@ -128,6 +144,51 @@ describe("API endpoints", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "Failed to create job" });
+  });
+
+  it("returns the full job record for an existing job", async () => {
+    insertJob.mockResolvedValueOnce({ rows: [fullJob] });
+
+    const response = await getJob(fullJob.id);
+
+    expect(insertJob).toHaveBeenCalledExactlyOnceWith("SELECT * FROM jobs WHERE id = $1", [
+      fullJob.id,
+    ]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ...fullJob,
+      created_at: fullJob.created_at.toISOString(),
+      started_at: fullJob.started_at.toISOString(),
+      finished_at: fullJob.finished_at.toISOString(),
+    });
+  });
+
+  it("returns 400 for a malformed job ID without querying the database", async () => {
+    const response = await getJob("not-a-uuid");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid job ID" });
+    expect(insertJob).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a valid job ID that does not exist", async () => {
+    insertJob.mockResolvedValueOnce({ rows: [] });
+
+    const response = await getJob("550e8400-e29b-41d4-a716-446655440000");
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Job not found" });
+  });
+
+  it("returns a generic 500 response when retrieving a job fails", async () => {
+    insertJob.mockRejectedValueOnce(new Error("database credentials must not be exposed"));
+
+    const response = await getJob(fullJob.id);
+    const body = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(body).toBe('{"error":"Failed to retrieve job"}');
+    expect(body).not.toContain("credentials");
   });
 
   it("returns 200 when the database readiness query succeeds", async () => {

@@ -1,4 +1,4 @@
-import { JobRequest } from "@jobs/shared";
+import { JobId, JobRequest } from "@jobs/shared";
 import express, { type Express } from "express";
 import { rateLimit } from "express-rate-limit";
 
@@ -9,7 +9,10 @@ interface ReadinessClient {
 
 interface DatabasePool {
   connect(): Promise<ReadinessClient>;
-  query(statement: string, values: string[]): Promise<{ rows: { id: string; status: string }[] }>;
+  query(
+    statement: string,
+    values: string[],
+  ): Promise<{ rows: { id: string; status: string; [field: string]: unknown }[] }>;
 }
 
 const readinessQueryTimeoutMs = 5_000;
@@ -49,6 +52,27 @@ export function createApp(pool: DatabasePool): Express {
       }
     },
   );
+
+  app.get("/jobs/:id", async (request, response) => {
+    const id = JobId.safeParse(request.params.id);
+    if (!id.success) {
+      response.status(400).json({ error: "Invalid job ID" });
+      return;
+    }
+
+    try {
+      const { rows } = await pool.query("SELECT * FROM jobs WHERE id = $1", [id.data]);
+      const [job] = rows;
+      if (!job) {
+        response.status(404).json({ error: "Job not found" });
+        return;
+      }
+
+      response.status(200).json(job);
+    } catch {
+      response.status(500).json({ error: "Failed to retrieve job" });
+    }
+  });
 
   app.use(express.json());
 
