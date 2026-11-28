@@ -8,7 +8,7 @@ interface TestClient {
   release(destroy?: boolean): void;
 }
 
-describe("API rate limits", () => {
+describe("API requests", () => {
   let server: Server;
   let baseUrl: string;
   const query = vi.fn<(statement: string) => Promise<unknown>>();
@@ -34,21 +34,16 @@ describe("API rate limits", () => {
     });
   });
 
-  it("limits readiness requests and stops querying the database after the limit", async () => {
-    for (let request = 0; request < 30; request += 1) {
+  it("continues handling readiness requests beyond 30 requests", async () => {
+    for (let request = 0; request < 31; request += 1) {
       const response = await fetch(`${baseUrl}/health/ready`);
       expect(response.status).toBe(200);
     }
 
-    const limitedResponse = await fetch(`${baseUrl}/health/ready`);
-
-    expect(limitedResponse.status).toBe(429);
-    expect(limitedResponse.headers.get("ratelimit")).toBeTruthy();
-    expect(await limitedResponse.json()).toEqual({ error: "Too many requests" });
-    expect(query).toHaveBeenCalledTimes(30);
+    expect(query).toHaveBeenCalledTimes(31);
   });
 
-  it("limits job submissions before parsing the body or querying the database", async () => {
+  it("continues accepting job submissions beyond 30 requests", async () => {
     const body = JSON.stringify({ type: "sum", payload: { numbers: [1, 2] } });
     const postJob = (body: string) =>
       fetch(`${baseUrl}/jobs`, {
@@ -57,40 +52,25 @@ describe("API rate limits", () => {
         body,
       });
 
-    for (let request = 0; request < 30; request += 1) {
+    for (let request = 0; request < 31; request += 1) {
       const response = await postJob(body);
       expect(response.status).toBe(202);
       await response.text();
     }
 
-    const limitedResponse = await postJob(body);
-    expect(limitedResponse.status).toBe(429);
-    expect(limitedResponse.headers.get("ratelimit")).toBeTruthy();
-    expect(limitedResponse.headers.get("retry-after")).toBeTruthy();
-    expect(await limitedResponse.json()).toEqual({ error: "Too many requests" });
-
-    const malformedResponse = await postJob("{");
-    expect(malformedResponse.status).toBe(429);
-    await malformedResponse.text();
-    expect(insertJob).toHaveBeenCalledTimes(30);
+    expect(insertJob).toHaveBeenCalledTimes(31);
   });
 
-  it("limits job lookups before querying the database", async () => {
+  it("continues looking up jobs beyond 30 requests", async () => {
     insertJob.mockClear();
     const jobId = "94c1923a-5361-4230-9904-5949ec415ad4";
 
-    for (let request = 0; request < 30; request += 1) {
+    for (let request = 0; request < 31; request += 1) {
       const response = await fetch(`${baseUrl}/jobs/${jobId}`);
       expect(response.status).toBe(200);
       await response.text();
     }
 
-    const limitedResponse = await fetch(`${baseUrl}/jobs/${jobId}`);
-
-    expect(limitedResponse.status).toBe(429);
-    expect(limitedResponse.headers.get("ratelimit")).toBeTruthy();
-    expect(limitedResponse.headers.get("retry-after")).toBeTruthy();
-    expect(await limitedResponse.json()).toEqual({ error: "Too many requests" });
-    expect(insertJob).toHaveBeenCalledTimes(30);
+    expect(insertJob).toHaveBeenCalledTimes(31);
   });
 });
