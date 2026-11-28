@@ -16,9 +16,9 @@ interface DatabasePool {
 
 const readinessQueryTimeoutMs = 5_000;
 
-class JobCreationError extends Error {
-  constructor(cause: unknown) {
-    super("Failed to create job", { cause });
+class JobOperationError extends Error {
+  constructor(message: "Failed to create job" | "Failed to retrieve job", cause: unknown) {
+    super(message, { cause });
   }
 }
 
@@ -40,7 +40,7 @@ const handleError: ErrorRequestHandler = (error: unknown, request, response, nex
 
   let status = 500;
   let message = "Internal server error";
-  if (error instanceof JobCreationError) {
+  if (error instanceof JobOperationError) {
     message = error.message;
   } else if (error instanceof Error && "status" in error) {
     switch (error.status) {
@@ -89,7 +89,7 @@ export function createApp(pool: DatabasePool): Express {
         const [{ id, status }] = rows;
         response.status(202).json({ id, status });
       } catch (error) {
-        throw new JobCreationError(error);
+        throw new JobOperationError("Failed to create job", error);
       }
     },
   );
@@ -110,8 +110,8 @@ export function createApp(pool: DatabasePool): Express {
       }
 
       response.status(200).json(job);
-    } catch {
-      response.status(500).json({ error: "Failed to retrieve job" });
+    } catch (error) {
+      throw new JobOperationError("Failed to retrieve job", error);
     }
   });
 

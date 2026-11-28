@@ -221,14 +221,23 @@ describe("API endpoints", () => {
   });
 
   it("returns a generic 500 response when retrieving a job fails", async () => {
-    insertJob.mockRejectedValueOnce(new Error("database credentials must not be exposed"));
+    using logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const databaseError = Object.assign(new Error("database credentials must not be exposed"), {
+      status: 400,
+    });
+    insertJob.mockRejectedValueOnce(databaseError);
 
     const response = await getJob(fullJob.id);
     const body = await response.text();
 
     expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/json");
     expect(body).toBe('{"error":"Failed to retrieve job"}');
-    expect(body).not.toContain("credentials");
+    expect(logError).toHaveBeenCalledExactlyOnceWith("Failed to retrieve job", {
+      method: "GET",
+      route: "/jobs/:id",
+      status: 500,
+    });
   });
 
   it("returns 200 when the database readiness query succeeds", async () => {
