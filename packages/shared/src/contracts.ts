@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-// Schemat danych do sumowania liczb
+// Number summation data schema
 export const SumPayload = z.object({
   numbers: z.array(z.number().finite()).min(1).max(10_000),
 });
 
-// Schemat danych CSV
+// CSV data schema
 export const CsvPayload = z.object({
   csv: z
     .string()
@@ -16,7 +16,7 @@ export const CsvPayload = z.object({
     }),
 });
 
-// Zadanie przychodzące do API
+// Incoming API request
 export const JobRequest = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("sum"),
