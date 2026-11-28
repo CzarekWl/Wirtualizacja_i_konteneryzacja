@@ -281,6 +281,9 @@ importers:
       '@jobs/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      amqplib:
+        specifier: ^2.4.2
+        version: 2.4.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -855,6 +858,10 @@ packages:
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
+
+  amqplib@2.4.2:
+    resolution: {integrity: sha512-FjhULAQ7jwjs8bi1eAwSyUfiY0tbyi8vsh4iRiHblxj2+QETfJcVobTQ1u919ARPq0TAxSR06m2gO0yp/ccgdw==}
+    engines: {node: '>=18'}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -2148,6 +2155,8 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
+
+  amqplib@2.4.2: {}
 
   assertion-error@2.0.1: {}
 

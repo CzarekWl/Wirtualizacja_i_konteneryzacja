@@ -8,10 +8,12 @@
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "dev": "pnpm --filter @jobs/shared build && tsx watch src/index.ts",
+    "queues:declare": "pnpm --filter @jobs/shared build && tsx src/declare-queues.ts",
     "test": "vitest run"
   },
   "dependencies": {
-    "@jobs/shared": "workspace:*"
+    "@jobs/shared": "workspace:*",
+    "amqplib": "^2.4.2"
   },
   "devDependencies": {
     "@types/node": "catalog:",
