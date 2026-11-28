@@ -1,5 +1,5 @@
 import { JobId, JobRequest } from "@jobs/shared";
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 
 interface ReadinessClient {
   query(statement: string): Promise<unknown>;
@@ -15,6 +15,57 @@ interface DatabasePool {
 }
 
 const readinessQueryTimeoutMs = 5_000;
+
+class JobOperationError extends Error {
+  constructor(message: "Failed to create job" | "Failed to retrieve job", cause: unknown) {
+    super(message, { cause });
+  }
+}
+
+const handleError: ErrorRequestHandler = (error: unknown, request, response, next) => {
+  const route = (request.route as { path?: unknown } | undefined)?.path;
+  const context = {
+    method: request.method,
+    route: typeof route === "string" ? route : undefined,
+  };
+
+  if (response.headersSent) {
+    console.error("Request failed after headers were sent", {
+      ...context,
+      status: response.statusCode,
+    });
+    next(Object.assign(new Error("Internal server error"), { stack: undefined }));
+    return;
+  }
+
+  let status = 500;
+  let message = "Internal server error";
+  if (error instanceof JobOperationError) {
+    message = error.message;
+  } else if (error instanceof Error && "status" in error) {
+    switch (error.status) {
+      case 400:
+        status = 400;
+        message = "Invalid request body";
+        break;
+      case 413:
+        status = 413;
+        message = "Request body too large";
+        break;
+      case 415:
+        status = 415;
+        message = "Unsupported request body encoding";
+        break;
+    }
+  }
+
+  if (status >= 500) {
+    console.error(message, { ...context, status });
+  } else {
+    console.warn(message, { ...context, status });
+  }
+  response.status(status).json({ error: message });
+};
 
 export function createApp(pool: DatabasePool): Express {
   const app: Express = express();
@@ -37,8 +88,8 @@ export function createApp(pool: DatabasePool): Express {
         );
         const [{ id, status }] = rows;
         response.status(202).json({ id, status });
-      } catch {
-        response.status(500).json({ error: "Failed to create job" });
+      } catch (error) {
+        throw new JobOperationError("Failed to create job", error);
       }
     },
   );
@@ -59,8 +110,8 @@ export function createApp(pool: DatabasePool): Express {
       }
 
       response.status(200).json(job);
-    } catch {
-      response.status(500).json({ error: "Failed to retrieve job" });
+    } catch (error) {
+      throw new JobOperationError("Failed to retrieve job", error);
     }
   });
 
@@ -100,6 +151,8 @@ export function createApp(pool: DatabasePool): Express {
   app.use((_request, response) => {
     response.status(404).json({ error: "Not found" });
   });
+
+  app.use(handleError);
 
   return app;
 }
