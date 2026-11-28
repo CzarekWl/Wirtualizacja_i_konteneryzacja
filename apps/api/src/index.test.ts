@@ -47,6 +47,7 @@ describe("API endpoints", () => {
 
   beforeAll(async () => {
     const app = createApp({ connect, query: insertJob });
+    app.set("env", "production");
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
 
@@ -251,6 +252,30 @@ describe("API endpoints", () => {
     expect(body).toBe('{"status":"error","database":"unavailable"}');
     expect(body).not.toContain("credentials");
     expect(release).toHaveBeenCalledWith(false);
+  });
+
+  it("logs only safe details when releasing a client fails after sending headers", async () => {
+    using logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    release.mockImplementationOnce(() => {
+      throw new Error("private database details");
+    });
+
+    const response = await fetch(`${baseUrl}/health/ready`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+    await vi.waitFor(() => {
+      expect(logError).toHaveBeenNthCalledWith(1, "Request failed after headers were sent", {
+        method: "GET",
+        route: "/health/ready",
+        status: 200,
+      });
+      expect(logError).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ message: "Internal server error", stack: undefined }),
+      );
+    });
+    expect(JSON.stringify(logError.mock.calls)).not.toContain("private database details");
   });
 
   it("returns 503 when acquiring a database client fails", async () => {

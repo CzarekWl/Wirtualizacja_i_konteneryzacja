@@ -23,8 +23,18 @@ class JobCreationError extends Error {
 }
 
 const handleError: ErrorRequestHandler = (error: unknown, request, response, next) => {
+  const route = (request.route as { path?: unknown } | undefined)?.path;
+  const context = {
+    method: request.method,
+    route: typeof route === "string" ? route : undefined,
+  };
+
   if (response.headersSent) {
-    next(error);
+    console.error("Request failed after headers were sent", {
+      ...context,
+      status: response.statusCode,
+    });
+    next(Object.assign(new Error("Internal server error"), { stack: undefined }));
     return;
   }
 
@@ -49,16 +59,10 @@ const handleError: ErrorRequestHandler = (error: unknown, request, response, nex
     }
   }
 
-  const route = (request.route as { path?: unknown } | undefined)?.path;
-  const context = {
-    method: request.method,
-    route: typeof route === "string" ? route : undefined,
-    status,
-  };
   if (status >= 500) {
-    console.error(message, context);
+    console.error(message, { ...context, status });
   } else {
-    console.warn(message, context);
+    console.warn(message, { ...context, status });
   }
   response.status(status).json({ error: message });
 };
