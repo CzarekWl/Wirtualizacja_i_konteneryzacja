@@ -97,9 +97,40 @@ describe("API endpoints", () => {
 
   it("returns 413 without querying the database when the JSON body exceeds the route limit", async () => {
     const response = await postJob({ type: "csv_stats", payload: { csv: "x".repeat(2_097_152) } });
-    await response.text();
 
     expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Request body too large" });
+    expect(insertJob).not.toHaveBeenCalled();
+  });
+
+  it("returns safe JSON for malformed JSON without logging request content", async () => {
+    using warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const response = await fetch(`${baseUrl}/jobs?token=private-query-value`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: '{"password":"private-body-value",}',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(warning).toHaveBeenCalledExactlyOnceWith("Invalid request body", {
+      method: "POST",
+      route: "/jobs",
+      status: 400,
+    });
+    expect(insertJob).not.toHaveBeenCalled();
+  });
+
+  it("returns JSON for an unsupported request body encoding", async () => {
+    const response = await fetch(`${baseUrl}/jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=iso-8859-1" },
+      body: JSON.stringify(sumJob),
+    });
+
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "Unsupported request body encoding" });
     expect(insertJob).not.toHaveBeenCalled();
   });
 
@@ -138,12 +169,20 @@ describe("API endpoints", () => {
   });
 
   it("returns a generic 500 response when inserting a job fails", async () => {
-    insertJob.mockRejectedValueOnce(new Error("database details"));
+    using logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const databaseError = Object.assign(new Error("private database details"), { status: 400 });
+    insertJob.mockRejectedValueOnce(databaseError);
 
     const response = await postJob(sumJob);
 
     expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.json()).toEqual({ error: "Failed to create job" });
+    expect(logError).toHaveBeenCalledExactlyOnceWith("Failed to create job", {
+      method: "POST",
+      route: "/jobs",
+      status: 500,
+    });
   });
 
   it("returns the full job record for an existing job", async () => {

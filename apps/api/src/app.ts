@@ -1,5 +1,5 @@
 import { JobId, JobRequest } from "@jobs/shared";
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 
 interface ReadinessClient {
   query(statement: string): Promise<unknown>;
@@ -15,6 +15,53 @@ interface DatabasePool {
 }
 
 const readinessQueryTimeoutMs = 5_000;
+
+class JobCreationError extends Error {
+  constructor(cause: unknown) {
+    super("Failed to create job", { cause });
+  }
+}
+
+const handleError: ErrorRequestHandler = (error: unknown, request, response, next) => {
+  if (response.headersSent) {
+    next(error);
+    return;
+  }
+
+  let status = 500;
+  let message = "Internal server error";
+  if (error instanceof JobCreationError) {
+    message = error.message;
+  } else if (error instanceof Error && "status" in error) {
+    switch (error.status) {
+      case 400:
+        status = 400;
+        message = "Invalid request body";
+        break;
+      case 413:
+        status = 413;
+        message = "Request body too large";
+        break;
+      case 415:
+        status = 415;
+        message = "Unsupported request body encoding";
+        break;
+    }
+  }
+
+  const route = (request.route as { path?: unknown } | undefined)?.path;
+  const context = {
+    method: request.method,
+    route: typeof route === "string" ? route : undefined,
+    status,
+  };
+  if (status >= 500) {
+    console.error(message, context);
+  } else {
+    console.warn(message, context);
+  }
+  response.status(status).json({ error: message });
+};
 
 export function createApp(pool: DatabasePool): Express {
   const app: Express = express();
@@ -37,8 +84,8 @@ export function createApp(pool: DatabasePool): Express {
         );
         const [{ id, status }] = rows;
         response.status(202).json({ id, status });
-      } catch {
-        response.status(500).json({ error: "Failed to create job" });
+      } catch (error) {
+        throw new JobCreationError(error);
       }
     },
   );
@@ -100,6 +147,8 @@ export function createApp(pool: DatabasePool): Express {
   app.use((_request, response) => {
     response.status(404).json({ error: "Not found" });
   });
+
+  app.use(handleError);
 
   return app;
 }
